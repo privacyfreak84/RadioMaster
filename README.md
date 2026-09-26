@@ -14,3 +14,4 @@ Requires: Python 3 (stdlib only — `tomllib` is used for TOML theme support on 
 - `lofi.py` — the entire application
 - `PROJECT_REFERENCE.md` — architecture, subsystems, conventions
 - `PROJECT_STATUS.md` — current phase, immediate goal, roadmap, session log
+- `themes/` — standalone `.toml` theme files (drop-in for `~/.lofi_cli_themes/` or wherever `cfg['theme_dir']` points). `themes/reference.toml` is the exhaustive "every option, explicitly set and commented" specimen — start here when authoring a new theme.

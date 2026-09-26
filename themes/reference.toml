@@ -1,0 +1,561 @@
+# ============================================================================
+# REFERENCE THEME
+# ============================================================================
+#
+# This file is not meant to be anyone's daily-driver look. Its only job is
+# to be the exhaustive "everything you can customize" specimen: every
+# single option the theme engine understands is set here explicitly, with
+# a comment explaining what it does and (for colors especially) exactly
+# which on-screen element it controls. Copy this whole file as your
+# starting point for a new theme, delete what you don't need, and change
+# the rest.
+#
+# ONE IMPORTANT TOML GOTCHA, up front, because it has already caused real
+# bugs in real theme files: once a [table] header like [colors] appears,
+# every bare "key = value" line AFTER it belongs to THAT table, not to the
+# top level - there is no way to "close" a table and go back to top-level
+# keys without another header. That means all of the plain (non-table)
+# settings below - border_style, density, ascii_title, and so on - MUST
+# come before the first [table] header in the file. If you ever want to
+# add a new top-level setting to a theme file, add it up near the top,
+# not wherever seems logical while skimming - "logical" and "valid TOML"
+# are not always the same file position. The in-app theme validator
+# (Tools -> Validate Theme Files) specifically catches this mistake and
+# can usually auto-fix it for you, but it's worth understanding why it
+# happens in the first place.
+#
+# extends: a real, valid top-level option this file deliberately does NOT
+# use. A theme can set extends = "some_other_theme" to inherit everything
+# from that theme and override just a few fields - see showcase.toml for
+# a working example of that pattern. Reference's whole job is to show
+# every field explicitly, in one place, so using extends here would
+# defeat the point - some fields would live in a parent file instead of
+# being visible right here.
+
+
+# ----------------------------------------------------------------------
+# STRUCTURAL / LAYOUT OPTIONS
+# These are plain "key = value" lines, which is why they have to live up
+# here before any [table] header - see the TOML gotcha above.
+# ----------------------------------------------------------------------
+
+# border_style: what characters draw box edges and dividers.
+#   "sharp"   (the default) - plain right-angle corners: box drawing chars
+#   "rounded" - soft corners
+#   "double"  - double-line box-drawing
+#   "ascii"   - plain +/-/| characters, for terminals/fonts with no
+#               Unicode box-drawing glyphs at all
+border_style = "rounded"
+
+# density: how much breathing room dialogs get, and (indirectly) how
+# tightly packed some lists feel.
+#   "compact"  - zero extra padding inside dialog boxes (the original,
+#                tightest look)
+#   "normal"   (the default) - one row/column of padding
+#   "spacious" - two rows/columns of padding
+# This is also user-adjustable per-session from Tools -> Density, which
+# just overrides whatever the theme sets.
+density = "spacious"
+
+# dialog_title_align: where a dialog box's title text sits in its top
+# border.
+#   "left"   (the default) - flush against the top-left corner
+#   "center" - centered in the top border
+dialog_title_align = "center"
+
+# pulse: whether the "now playing" status glyph blinks on and off while
+# a station is actively streaming (true, the default) or stays solid
+# (false).
+pulse = true
+
+# ascii_title: renders the "Stations"/"Favorites" pane title as big
+# chunky block-letter art (using ascii_font below) instead of a single
+# line of normal text.
+#   false (the default) - plain text title
+#   true  - block-letter banner
+# This theme sets it true specifically so ascii_font (further down) has
+# something to actually demonstrate.
+ascii_title = true
+
+# now_playing_style: how much detail the Now Playing pane shows.
+#   "dense"   (the default) - full metadata table (Channel, Tags, Started,
+#             Volume, Sleep Timer, etc.) plus idle_art when nothing's
+#             playing
+#   "minimal" - just a station icon and name, no metadata table, no idle
+#              art at all (idle_art is simply never drawn in this mode -
+#              if a theme sets minimal AND defines idle_art, the theme
+#              validator will point that out as a heads-up, not an error)
+now_playing_style = "dense"
+
+# selection_style: how the currently-highlighted row in a list looks.
+#   "block"  (the default) - the whole row inverts to the theme's
+#            selection color, like a text editor's selection highlight
+#   "marker" - the row keeps its normal colors, but gets a glyph prefix
+#             (selection_marker, set below) instead
+selection_style = "marker"
+
+# tab_style: how the tab strip at the top of the right-hand pane looks.
+#   "numbered"   (the default) - "[1] Now Playing"
+#   "underlined" - the active tab's text is underlined instead of bracketed
+tab_style = "underlined"
+
+# section_header_style: how section headers like "Context" or "Recent
+# Sessions" are drawn.
+#   "plain"  (the default) - just the text
+#   "marker" - a glyph prefix (section_marker, set below) before the text
+section_header_style = "marker"
+
+# metadata_style: how the Context pane's station details are laid out.
+#   "aligned" (the default) - one "Label : value" pair per row, labels
+#             column-aligned
+#   "inline"  - the same information condensed into fewer, denser lines
+metadata_style = "aligned"
+
+# empty_state_style: how "nothing here" messages look (empty station
+# list, no search results, no history yet, and so on).
+#   "plain"      (the default) - centered message text only
+#   "decorative" - the message wrapped in a small flourish using
+#                 empty_state_deco (set below). This never hides or
+#                 shortens the message - it only adds ornament around it.
+empty_state_style = "decorative"
+
+
+# idle_art: shown in the Now Playing pane before anything's ever been
+# played this session - but ONLY when all three of these are true:
+# now_playing_style is "dense" (set above - "minimal" never draws it at
+# all), nothing has been played yet (it's replaced the moment you play
+# anything, until the app restarts), and the layout isn't in "compact"
+# mode (an automatic fallback used on short terminals that drops
+# decoration first). It's normal for this not to show up under a small
+# terminal or after playing a station - that's not a bug, just what
+# those three conditions mean.
+#
+# Like every plain (non-table) setting on this page, this has to sit
+# before the first [table] header below - a bare list is just as much a
+# top-level value as a string or a boolean is, and the same TOML rule
+# from the top of this file applies to it too. (An earlier draft of this
+# very file got this wrong and put idle_art at the bottom, after
+# [labels] - it silently became labels.idle_art instead of a real
+# top-level idle_art, exactly the mistake this comment is warning about.
+# The theme validator caught it immediately.)
+idle_art = [
+    "-- R E F E R E N C E --",
+    "   (nothing playing yet)",
+]
+
+# ----------------------------------------------------------------------
+# [meta] - just display info, doesn't affect rendering at all.
+# ----------------------------------------------------------------------
+
+[meta]
+name = "Reference"
+description = "Exhaustive theme-schema demo, with comments explaining exactly what every option and every color does. Start here when authoring a new theme."
+
+
+# ----------------------------------------------------------------------
+# [colors]
+#
+# Every value here can be written two ways, and you can mix both freely
+# within the same theme, even within the same [fg, bg] pair:
+#   - a plain curses palette number, 0-255, or -1 for "whatever the
+#     terminal's own default is" (the original, always-supported way)
+#   - an exact hex color, like "#3b82f6" or the short form "#38f"
+#     (expands to "#3388ff") - renders pixel-exact on terminals that
+#     support redefining their palette, and automatically falls back to
+#     the closest of the 256 standard colors everywhere else. Nothing
+#     about this can crash or show a jarring color - worst case, "close
+#     but not exact".
+#
+# Most colors below are a single value, which is shorthand for
+# "[that color, -1]" - i.e. "use this as the text color, and don't touch
+# the background". A few (like selection) explicitly set both sides.
+#
+# WHERE EACH ONE ACTUALLY SHOWS UP - this is the part most theme
+# references skip, and it's the part that actually matters when you're
+# trying to figure out why something looks a certain color:
+# ----------------------------------------------------------------------
+
+[colors]
+
+# background / foreground: the base colors for the whole app - every
+# other color role that doesn't set its own background falls back to
+# this background, and plain body text (station names in the list,
+# unstyled dialog text, and so on) uses this foreground directly.
+background = "#14141f"
+foreground = 252
+
+# primary (older theme files may call this "accent" instead - both work,
+# and if a theme sets both for the same role, this newer "primary" name
+# wins): the app's main accent color. Concretely, this is what colors:
+#   - the "now playing" station icon and the idle-art artwork
+#   - the app title text in the very top border ("Lofi Stream CLI")
+#   - the active tab's text when tab_style is "underlined"
+#   - every popup dialog box's border lines (wizard, confirm, tools menu,
+#     folder picker, and so on)
+#   - "N note(s)" text in the theme validator's file list
+primary = "#4da6ff"
+
+# success: used for anything meaning "this is actively working".
+# Concretely:
+#   - the "Streaming" status glyph and word while a station plays
+#   - the current station's name in the Now Playing pane (dense style)
+#   - "ongoing" (not-yet-ended) session rows in the History tab
+#   - a few section headers on the Stats tab
+success = [77, -1]
+
+# warning: used for "in between" or needs-attention states, not full
+# errors. Concretely:
+#   - "Resolving..." and "Paused" status text
+#   - the "Now Playing: None" idle message
+#   - the sleep-timer countdown display
+#   - every dialog's own footer control hints, e.g. "[Enter] Save
+#     [Esc] Cancel" at the bottom of a popup
+warning = "#e0a030"
+
+# selection (older name: "highlight"): the currently-highlighted row in
+# any list - the station list, the tag picker, the theme picker, and so
+# on. This is one of the few roles that usually sets BOTH sides of the
+# pair on purpose: the first value becomes the text color, the second
+# becomes the highlight bar's background (only used when selection_style
+# is "block" - in "marker" mode, like this theme uses, only the text
+# color half actually shows, coloring the selected row's text and its
+# marker glyph without inverting the row).
+selection = ["#14141f", "#4da6ff"]
+
+# secondary (older name: "label"): used for field labels and a couple of
+# structural text elements. Concretely:
+#   - bold field labels in the Context pane ("Channel :", "Tags :", and
+#     so on)
+#   - the ascii_title banner's MAIN ink color (the '#' character in a
+#     font's glyphs below - see ascii_font for the second color used
+#     there)
+#   - the "dot FolderName" qualifier line under an ascii-art banner
+#   - a dialog's own step header, e.g. "Step 2/6: Choose a Folder"
+secondary = ["#c792ea", -1]
+
+# error: stream/playback problems. Concretely:
+#   - "Unavailable" and "Stream Unavailable" status text
+#   - stream error messages and the "mpv not found in PATH" warning
+error = [203, -1]
+
+# muted: de-emphasized, secondary-importance text. Concretely:
+#   - the footer control-hints line at the very bottom of the main screen
+#   - every "nothing here" empty-state message, including its decoration
+#     glyphs when empty_state_style is "decorative"
+#   - small hint text inside input dialogs (e.g. "Leave empty to reset
+#     to the default.")
+#   - the "Scanning: /path/to/themes" status line in the theme validator
+muted = "#6c7280"
+
+# border: exists as a real, settable color role - curses.init_pair() gets
+# called for it just like every other role - but as of this build,
+# nothing in the app's draw code actually reads it yet. Right now,
+# dialog box borders use `primary` (see above) and the main window's
+# outer frame uses plain foreground/background. Setting this to
+# something different from either of those won't currently change
+# anything visible - it's a known gap, not a mistake in your theme file,
+# and it's set here anyway because reference's whole job is showing
+# every field that EXISTS, working or not.
+border = [61, "#4da6ff"]
+
+# decorative: ornamental-only color, used in exactly one place right
+# now - the SECOND tone in a two-tone ascii_title banner. A font's glyphs
+# (see ascii_font below) can use two different "ink" characters: the
+# main-fill character (colored with `secondary`, above) and a second
+# shading character - a shadow or highlight edge - colored with this
+# `decorative` value instead. If a font never uses that second
+# character, this color is simply never drawn; it does NOT affect the
+# empty-state flourish glyph (that one uses `muted`, described above),
+# despite the name being easy to assume that from.
+decorative = "#e0a030"
+
+
+# ----------------------------------------------------------------------
+# [ascii_font]
+#
+# ascii_title (set above) turns the pane title into block-letter art
+# instead of plain text. Where that art comes from is this section - and
+# it's one of two valid shapes:
+#   - a bare name string, like ascii_font = "slab", picking one of the
+#     built-in fonts (currently "block" and "slab") - simple, but you
+#     don't get to control the letterforms
+#   - a full custom font table, like the one below - your own hand- (or
+#     programmatically-) drawn letterforms, completely independent of
+#     the built-in fonts
+#
+# This theme uses the second, richer form, and that custom font itself
+# demonstrates two more things at once:
+#
+#   1. CASE SENSITIVITY - the capital and lowercase forms of every letter
+#      are genuinely different glyph data here, not the same shape forced
+#      through .upper(). Try switching to this theme and looking at any
+#      mixed-case title.
+#   2. TWO-TONE SHADING - every glyph's bottom row uses the second ink
+#      character instead of the main one, so it renders in `decorative`
+#      color (set above) instead of `secondary` - a small drop-shadow
+#      effect using two real theme colors instead of one flat color for
+#      the whole banner.
+#
+# Every glyph below is exactly char_height (5) rows, and every row within
+# one glyph is the same width as the others in that glyph (though
+# different LETTERS are allowed to be different widths from each other -
+# nothing requires every glyph to match char_width exactly; that number
+# is a nominal/typical size for documentation and layout math, not a
+# hard per-glyph rule). Two solid-block characters do the work - the
+# filled block is the main color, a lighter shaded block is the second/
+# shadow color - and a light-dot character means background (renders as
+# empty space either way). The theme validator checks every glyph's row
+# count and row-width consistency automatically.
+# ----------------------------------------------------------------------
+
+[ascii_font]
+char_width = 5
+char_height = 5
+
+[ascii_font.glyphs]
+A = ["░███░", "█░░░█", "█████", "█░░░█", "▓░░░▓"]
+B = ["████░", "█░░░█", "████░", "█░░░█", "▓▓▓▓░"]
+C = ["░████", "█░░░░", "█░░░░", "█░░░░", "░▓▓▓▓"]
+D = ["████░", "█░░░█", "█░░░█", "█░░░█", "▓▓▓▓░"]
+E = ["█████", "█░░░░", "███░░", "█░░░░", "▓▓▓▓▓"]
+F = ["█████", "█░░░░", "███░░", "█░░░░", "▓░░░░"]
+G = ["░████", "█░░░░", "█░███", "█░░░█", "░▓▓▓▓"]
+H = ["█░░░█", "█░░░█", "█████", "█░░░█", "▓░░░▓"]
+I = ["█████", "░░█░░", "░░█░░", "░░█░░", "▓▓▓▓▓"]
+J = ["░░███", "░░░░█", "░░░░█", "█░░░█", "░▓▓▓░"]
+K = ["█░░░█", "█░░█░", "███░░", "█░░█░", "▓░░░▓"]
+L = ["█░░░░", "█░░░░", "█░░░░", "█░░░░", "▓▓▓▓▓"]
+M = ["█░░░█", "██░██", "█░█░█", "█░░░█", "▓░░░▓"]
+N = ["█░░░█", "██░░█", "█░█░█", "█░░██", "▓░░░▓"]
+O = ["░███░", "█░░░█", "█░░░█", "█░░░█", "░▓▓▓░"]
+P = ["████░", "█░░░█", "████░", "█░░░░", "▓░░░░"]
+Q = ["░███░", "█░░░█", "█░█░█", "█░░█░", "░▓▓░▓"]
+R = ["████░", "█░░░█", "████░", "█░░█░", "▓░░░▓"]
+S = ["░████", "█░░░░", "░███░", "░░░░█", "▓▓▓▓░"]
+T = ["█████", "░░█░░", "░░█░░", "░░█░░", "░░▓░░"]
+U = ["█░░░█", "█░░░█", "█░░░█", "█░░░█", "░▓▓▓░"]
+V = ["█░░░█", "█░░░█", "█░░░█", "░█░█░", "░░▓░░"]
+W = ["█░░░█", "█░░░█", "█░█░█", "██░██", "▓░░░▓"]
+X = ["█░░░█", "░█░█░", "░░█░░", "░█░█░", "▓░░░▓"]
+Y = ["█░░░█", "░█░█░", "░░█░░", "░░█░░", "░░▓░░"]
+Z = ["█████", "░░░█░", "░░█░░", "░█░░░", "▓▓▓▓▓"]
+a = ["░░░░░", "░███░", "█░░░█", "█████", "▓░░░▓"]
+b = ["░░░░░", "████░", "█░░░█", "████░", "▓░░░▓"]
+c = ["░░░░░", "░████", "█░░░░", "█░░░░", "▓░░░░"]
+d = ["░░░░░", "████░", "█░░░█", "█░░░█", "▓░░░▓"]
+e = ["░░░░░", "█████", "█░░░░", "███░░", "▓░░░░"]
+f = ["░░░░░", "█████", "█░░░░", "███░░", "▓░░░░"]
+g = ["░░░░░", "░████", "█░░░░", "█░███", "▓░░░▓"]
+h = ["░░░░░", "█░░░█", "█░░░█", "█████", "▓░░░▓"]
+i = ["░░░░░", "█████", "░░█░░", "░░█░░", "░░▓░░"]
+j = ["░░░░░", "░░███", "░░░░█", "░░░░█", "▓░░░▓"]
+k = ["░░░░░", "█░░░█", "█░░█░", "███░░", "▓░░▓░"]
+l = ["░░░░░", "█░░░░", "█░░░░", "█░░░░", "▓░░░░"]
+m = ["░░░░░", "█░░░█", "██░██", "█░█░█", "▓░░░▓"]
+n = ["░░░░░", "█░░░█", "██░░█", "█░█░█", "▓░░▓▓"]
+o = ["░░░░░", "░███░", "█░░░█", "█░░░█", "▓░░░▓"]
+p = ["░░░░░", "████░", "█░░░█", "████░", "▓░░░░"]
+q = ["░░░░░", "░███░", "█░░░█", "█░█░█", "▓░░▓░"]
+r = ["░░░░░", "████░", "█░░░█", "████░", "▓░░▓░"]
+s = ["░░░░░", "░████", "█░░░░", "░███░", "░░░░▓"]
+t = ["░░░░░", "█████", "░░█░░", "░░█░░", "░░▓░░"]
+u = ["░░░░░", "█░░░█", "█░░░█", "█░░░█", "▓░░░▓"]
+v = ["░░░░░", "█░░░█", "█░░░█", "█░░░█", "░▓░▓░"]
+w = ["░░░░░", "█░░░█", "█░░░█", "█░█░█", "▓▓░▓▓"]
+x = ["░░░░░", "█░░░█", "░█░█░", "░░█░░", "░▓░▓░"]
+y = ["░░░░░", "█░░░█", "░█░█░", "░░█░░", "░░▓░░"]
+z = ["░░░░░", "█████", "░░░█░", "░░█░░", "░▓░░░"]
+" " = ["░░░░░", "░░░░░", "░░░░░", "░░░░░", "░░░░░"]
+
+
+# ----------------------------------------------------------------------
+# [glyphs]
+#
+# Small icons and symbols used throughout the UI. Any value here can be
+# a plain string (used regardless of the person's glyph-mode setting), or
+# a small table with up to three tiers - nerd/unicode/ascii - that
+# automatically picks the richest one the current glyph mode supports,
+# falling back gracefully. Two entries below (app_icon, favorite) use
+# that tiered form to demonstrate it; the rest use plain strings, which
+# is the normal case for most themes.
+# ----------------------------------------------------------------------
+
+[glyphs]
+
+# app_icon: shown next to the app name in a couple of places (like the
+# "Lofi Stream CLI" title). The tiered form here means: use a Nerd Font
+# icon if the person's glyph mode is "nerd", a Unicode symbol if it's
+# "unicode" (the default), or a plain-ASCII fallback if it's "ascii" -
+# for terminals/fonts that can't render either of the fancier tiers.
+app_icon = { nerd = "\uf001 Reference", unicode = "◆ Reference", ascii = "[#] Reference" }
+
+# favorite: the "starred" indicator on a favorited station.
+favorite = { nerd = "\uf005", unicode = "★", ascii = "*" }
+
+# status_playing / status_paused / status_idle / status_error: the small
+# glyph shown next to the current playback status word (Streaming,
+# Paused, Idle, Unavailable).
+status_playing = "◆"
+status_paused = "◇"
+status_idle = "·"
+status_error = "✕"
+
+# spinner: cycles through these characters, one per animation frame,
+# while a stream is resolving/loading.
+spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+# volume_fill / volume_empty: the two characters that make up the volume
+# bar display.
+volume_fill = "▰"
+volume_empty = "▱"
+
+# hud_fill / hud_empty: same idea as volume_fill/empty, for any other
+# progress-bar-style display.
+hud_fill = "▰"
+hud_empty = "▱"
+
+# default_tag_icon: shown next to a station tag that isn't in the
+# tag_icons table below.
+default_tag_icon = "♫"
+
+# selection_marker: only actually drawn when selection_style (set above)
+# is "marker" - the glyph placed in front of the selected row's text
+# instead of inverting the whole row.
+selection_marker = "➤"
+
+# section_marker: only actually drawn when section_header_style (set
+# above) is "marker" - the glyph placed in front of section headers like
+# "Context" or "Recent Sessions".
+section_marker = "▣"
+
+# empty_state_deco: only actually drawn when empty_state_style (set
+# above) is "decorative" - the glyph wrapped around empty-state messages.
+empty_state_deco = "◇"
+
+
+# ----------------------------------------------------------------------
+# [glyphs.tag_icons]
+# Per-tag icon overrides - if a station's tag matches one of these keys
+# exactly, this icon is shown instead of default_tag_icon (above). Add or
+# remove entries freely; tags with no match here just use the default.
+# ----------------------------------------------------------------------
+
+[glyphs.tag_icons]
+rain = "🌧"
+storm = "⛈"
+thunder = "⛈"
+fire = "🔥"
+jazz = "🎷"
+piano = "🎹"
+classical = "🎹"
+guitar = "🎸"
+medieval = "🏰"
+halloween = "🎃"
+christmas = "🎄"
+sleep = "😴"
+space = "🌌"
+synth = "🌆"
+synthwave = "🌆"
+game = "🎮"
+fallout = "☢"
+crickets = "🦗"
+night = "🌙"
+ambient = "🌫"
+coffee = "☕"
+study = "📚"
+focus = "🎯"
+chill = "🧊"
+sad = "💧"
+asian = "🎏"
+
+
+# ----------------------------------------------------------------------
+# [labels]
+#
+# Every piece of UI text the app looks up by name, listed here with its
+# own built-in default wording (not re-worded) - so this section doubles
+# as a complete vocabulary checklist. Copy this whole block into your own
+# theme and only change the lines that need your theme's own voice; see
+# the other builtin themes (retro_radio, cendre) for examples of themes
+# that rewrote most of this into their own vocabulary, and the Fittonia
+# demo theme for one that renamed literally everything into a botanical
+# vocabulary.
+# ----------------------------------------------------------------------
+
+[labels]
+
+# Pane titles (rendered as ascii_font block letters here, since
+# ascii_title is true above) and tab strip labels.
+title_stations = "Stations"
+title_favorites = "Favorites"
+tab_now_playing = "Now Playing"
+tab_history = "History"
+tab_stats = "Stats"
+
+# Section headers and the debug-log overlay's own title.
+context_header = "Context"
+debug_header = "=== LIVE DEBUG LOGS ==="
+
+# Field labels shown in the Context pane (metadata_style "aligned") or
+# condensed into fewer lines (metadata_style "inline").
+lbl_channel = "Channel"
+lbl_tags = "Tags"
+lbl_started = "Started"
+lbl_listening = "Listening"
+lbl_status = "Status"
+lbl_volume = "Volume"
+lbl_sleep_timer = "Sleep Timer"
+lbl_folders = "Folders"
+lbl_favorite = "Favorite"
+lbl_played = "Played"
+lbl_total_time = "Total Time"
+lbl_last_played = "Last Played"
+lbl_total_sessions = "Total Sessions"
+lbl_avg_session = "Avg Session"
+lbl_longest = "Longest"
+lbl_today = "Today"
+lbl_all_time = "All Time"
+
+# The idle placeholder shown in the Now Playing pane before anything's
+# ever been played this session.
+now_playing_none = "Now Playing: None"
+
+# The status word shown next to status_playing/paused/idle/error (the
+# glyphs set above) - the two are always shown together.
+status_word_playing = "Streaming"
+status_word_paused = "Paused"
+status_word_idle = "Idle"
+status_word_resolving = "Resolving..."
+status_word_unavailable = "Unavailable"
+status_word_error = "Stream Unavailable"
+
+# Error/problem messages.
+stream_error = "Stream Error"
+mpv_unavailable = "mpv not found in PATH - install mpv to enable playback"
+
+# History and Stats tab section headers.
+recent_sessions = "Recent Sessions"
+session_summary = "Session Summary"
+listening_time = "Listening Time"
+most_played = "Most Played"
+
+# The search dialog's own prompt text.
+search_prompt = "Search"
+
+# "Nothing here" messages - see empty_state_style above for how these
+# render (plain text, or wrapped in empty_state_deco).
+no_history = "(nothing played yet)"
+no_stats_data = "(no data yet)"
+no_station_selected = "(no station selected)"
+no_search_results = "No results"
+empty_folder = "This folder is empty"
+no_stations = "No stations yet"
+no_folders_yet = "(no folders yet)"
+no_readd_candidates = "(none)"
+
+# Footer keyboard-shortcut hints. Three tiers, picked automatically by
+# how much horizontal room the terminal actually has - the widest one
+# that fits wins, so a narrow terminal doesn't get truncated mid-word.
+footer_controls = "[Enter]Play/Pause [1-3]View [a]Add [e]Edit [x]Del [o]Folder [O]Manage [m]Menu [f/F]Favs [s]Search [?]Help [q]Quit"
+footer_controls_medium = "[Enter]Play/Pause [a/e/x]Add/Edit/Del [o/O]Folders [m]Menu [f/F]Favs [?]Help [q]Quit"
+footer_controls_compact = "[Enter]Play/Pause [m]Menu [?]Help [q]Quit"
