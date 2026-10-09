@@ -63,6 +63,14 @@ density = "spacious"
 #   "center" - centered in the top border
 dialog_title_align = "center"
 
+# header_style: how the app name embedded in the top border of the main
+# frame looks.
+#   "plain"  (the default) - bold accent-colored text sitting in the border
+#   "badge"  - a filled block in the theme's selection colors, flanked by
+#              shaded end caps (the header_cap glyph, set below, mirrored
+#              on the right). Much more prominent than plain text.
+header_style = "badge"
+
 # pulse: whether the "now playing" status glyph blinks on and off while
 # a station is actively streaming (true, the default) or stays solid
 # (false).
@@ -97,6 +105,9 @@ selection_style = "marker"
 # tab_style: how the tab strip at the top of the right-hand pane looks.
 #   "numbered"   (the default) - "[1] Now Playing"
 #   "underlined" - the active tab's text is underlined instead of bracketed
+#   "pill"       - the loud option: uppercase labels with wide padding, the
+#                  active tab a bold filled block, inactive tabs in the
+#                  theme's label color. Reads as a real tab bar.
 tab_style = "underlined"
 
 # section_header_style: how section headers like "Context" or "Recent
@@ -427,6 +438,12 @@ selection_marker = "➤"
 # above) is "marker" - the glyph placed in front of section headers like
 # "Context" or "Recent Sessions".
 section_marker = "▣"
+
+# header_cap: only actually drawn when header_style (set above) is
+# "badge" - the shaded end caps flanking the badge. Give the LEFT cap
+# only; the right one is the same string reversed automatically (so
+# "░▒▓" becomes "▓▒░" on the right, mirroring it).
+header_cap = "▒▓"
 
 # empty_state_deco: only actually drawn when empty_state_style (set
 # above) is "decorative" - the glyph wrapped around empty-state messages.

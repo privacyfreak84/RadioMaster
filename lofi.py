@@ -598,10 +598,12 @@ BUILTIN_THEMES = {
             "error":     [167, -1],  # muted coral, the git-diff-remove red
         },
         "border_style": "rounded",
+        "header_style": "badge",
+        "tab_style": "pill",
         "pulse": True,
         "ascii_title": True,
         "glyphs": {
-            "app_icon": "🌫 Cendre",
+            "app_icon": "◈ C E N D R E",
             "favorite": "✦",
             "status_playing": "◆",
             "status_paused": "◇",
@@ -694,6 +696,7 @@ BUILTIN_THEMES = {
         'border_style': 'rounded',
         'density': 'spacious',
         'dialog_title_align': 'center',
+        'header_style': 'badge',
         'pulse': True,
         'ascii_title': True,
         'now_playing_style': 'dense',
@@ -791,6 +794,7 @@ BUILTIN_THEMES = {
             'default_tag_icon': '♫',
             'selection_marker': '➤',
             'section_marker': '▣',
+            'header_cap': '▒▓',
             'empty_state_deco': '◇',
             'tag_icons': {
                 'rain': '🌧',
@@ -930,7 +934,7 @@ def theme_to_toml(theme_def):
     table needed), then [labels]. Used both by the one-time JSON->TOML
     migration and as the template a theme author can copy and hand-edit."""
     lines = []
-    top_level_keys = ['extends', 'border_style', 'density', 'dialog_title_align',
+    top_level_keys = ['extends', 'border_style', 'density', 'dialog_title_align', 'header_style',
                        'pulse', 'ascii_title', 'now_playing_style', 'selection_style',
                        'tab_style', 'section_header_style', 'metadata_style', 'empty_state_style']
     for key in top_level_keys:
@@ -1145,11 +1149,12 @@ TOP_LEVEL_SCALAR_SCHEMA = {
     'border_style':        {'sharp', 'rounded', 'double', 'ascii'},
     'density':              {'compact', 'normal', 'spacious'},
     'dialog_title_align':  {'left', 'center'},
+    'header_style':        {'plain', 'badge'},
     'pulse':               bool,
     'ascii_title':          bool,
     'now_playing_style':   {'dense', 'minimal'},
     'selection_style':     {'block', 'marker'},
-    'tab_style':           {'numbered', 'underlined'},
+    'tab_style':           {'numbered', 'underlined', 'pill'},
     'section_header_style':{'plain', 'marker'},
     'metadata_style':      {'aligned', 'inline'},
     'empty_state_style':   {'plain', 'decorative'},
@@ -1174,7 +1179,7 @@ GLYPH_KEYS = {
     'app_icon', 'favorite', 'status_playing', 'status_paused', 'status_idle',
     'status_error', 'spinner', 'volume_fill', 'volume_empty', 'hud_fill',
     'hud_empty', 'default_tag_icon', 'tag_icons', 'selection_marker',
-    'section_marker', 'empty_state_deco',
+    'section_marker', 'empty_state_deco', 'header_cap',
 }
 
 LABEL_KEYS = {
@@ -2453,14 +2458,18 @@ class LofiApp:
         style = self.theme.get('selection_style')
         return style if style in self.SELECTION_STYLES else 'block'
 
-    TAB_STYLES = ('numbered', 'underlined')
+    TAB_STYLES = ('numbered', 'underlined', 'pill')
 
     def tab_style(self):
         """'numbered' (default, unchanged): [1]Now Playing [2]History [3]Stats,
         active tab gets a full highlight block. 'underlined': the bracket
         numbers are dropped (the footer's [1-3] hint still covers the
         shortcut) and the active tab is marked with underline + accent color
-        instead of a block, for a quieter look."""
+        instead of a block, for a quieter look. 'pill': the opposite
+        direction - louder, not quieter. Uppercase labels with generous
+        padding, the active tab a bold filled block, inactive tabs in the
+        theme's label color (not plain body text) so the whole strip reads
+        as a tab bar instead of a line of text."""
         style = self.theme.get('tab_style')
         return style if style in self.TAB_STYLES else 'numbered'
 
@@ -2554,21 +2563,34 @@ class LofiApp:
                 art_y = 2 + len(self.theme.get('idle_art', ASCII_ART))
                 info_y = art_y + 2
 
+        # Pad every field label to the widest one so the colons line up in a
+        # straight column no matter what a theme renames its labels to. (This
+        # used to hardcode spaces tuned for the default English labels, so
+        # any theme that relabeled a field - Cendre's Source/Opened/Mode -
+        # got a ragged colon column.) Sleep Timer is deliberately left out of
+        # the width calculation: it's transient, and including it would shift
+        # every other row sideways whenever a timer starts or stops.
+        np_lw = max(len(self.label(k, d)) for k, d in (
+            ('lbl_channel', 'Channel'), ('lbl_tags', 'Tags'), ('lbl_started', 'Started'),
+            ('lbl_status', 'Status'), ('lbl_volume', 'Volume')))
+        def np_lbl(key, default):
+            return self.label(key, default).ljust(np_lw)
+
         rows = []
         if self.current_station:
-            rows.append((f"{self.label('lbl_channel', 'Channel')} : {self.current_station['channel']}", PAIR_LABEL | curses.A_BOLD))
-            rows.append((f"{self.label('lbl_tags', 'Tags')}    : {', '.join(self.current_station['tags'])}", 0))
+            rows.append((f"{np_lbl('lbl_channel', 'Channel')} : {self.current_station['channel']}", PAIR_LABEL | curses.A_BOLD))
+            rows.append((f"{np_lbl('lbl_tags', 'Tags')} : {', '.join(self.current_station['tags'])}", 0))
             if self.current_history_entry:
                 started_str = time.strftime('%H:%M', time.localtime(self.current_history_entry['started_ts']))
                 elapsed = time.time() - self.current_history_entry['started_ts']
-                rows.append((f"{self.label('lbl_started', 'Started')} : {started_str}  ·  {self.label('lbl_listening', 'Listening')} {self.format_duration(elapsed)}", 0))
+                rows.append((f"{np_lbl('lbl_started', 'Started')} : {started_str}  ·  {self.label('lbl_listening', 'Listening')} {self.format_duration(elapsed)}", 0))
         else:
             rows.append((self.label('now_playing_none', 'Now Playing : None'), PAIR_WARNING))
 
         if not compact:
             rows.append((None, None))  # blank line
         dot, dot_color, status_label = self.get_playback_status()
-        rows.append((f"{self.label('lbl_status', 'Status')}  : {dot} {status_label}", dot_color | curses.A_BOLD))
+        rows.append((f"{np_lbl('lbl_status', 'Status')} : {dot} {status_label}", dot_color | curses.A_BOLD))
         hud_active = bool(self.volume_hud_until and time.time() < self.volume_hud_until)
         if hud_active:
             if not compact:
@@ -2577,7 +2599,7 @@ class LofiApp:
             vol_bar_fill = self.cfg['volume'] // 5
             fill_ch, empty_ch = self.glyph('volume_fill', '#'), self.glyph('volume_empty', '-')
             vol_bar = f"[{fill_ch * vol_bar_fill}{empty_ch * (20 - vol_bar_fill)}] {self.cfg['volume']}%"
-            rows.append((f"{self.label('lbl_volume', 'Volume')}  : {vol_bar}", 0))
+            rows.append((f"{np_lbl('lbl_volume', 'Volume')} : {vol_bar}", 0))
 
         if self.mpv.playback_state == 'error' and self.mpv.last_error:
             if not compact:
@@ -2594,7 +2616,7 @@ class LofiApp:
             mins, secs = divmod(rem, 60)
             if not compact:
                 rows.append((None, None))
-            rows.append((f"{self.label('lbl_sleep_timer', 'Sleep Timer')} : {mins:02d}:{secs:02d}", PAIR_WARNING))
+            rows.append((f"{np_lbl('lbl_sleep_timer', 'Sleep Timer')} : {mins:02d}:{secs:02d}", PAIR_WARNING))
 
         return art_y, info_y, rows
 
@@ -2862,15 +2884,20 @@ class LofiApp:
             line3 = f"{played_bit}{last_bit}"
             rows = [line1, line2, line3]
         else:
-            rows = [
-                f"{self.label('lbl_channel', 'Channel')}     : {station['channel']}",
-                f"{self.label('lbl_folders', 'Folders')}     : {folder_str}",
-                f"{self.label('lbl_tags', 'Tags')}        : {', '.join(station['tags'])}",
-                f"{self.label('lbl_favorite', 'Favorite')}    : {'★ Yes' if is_fav else 'No'}",
-                f"{self.label('lbl_played', 'Played')}      : {count} time{'s' if count != 1 else ''}",
-                f"{self.label('lbl_total_time', 'Total Time')}  : {self.format_duration(total) if count else '-'}",
-                f"{self.label('lbl_last_played', 'Last Played')} : {self.format_relative_time(last_ts) if last_ts else 'Never'}",
+            # Same idea as the Now Playing rows: pad to the widest *actual*
+            # label (not a hardcoded width tuned for the default English
+            # ones) so a relabeled theme keeps its colons in one column.
+            fields = [
+                ('lbl_channel', 'Channel', station['channel']),
+                ('lbl_folders', 'Folders', folder_str),
+                ('lbl_tags', 'Tags', ', '.join(station['tags'])),
+                ('lbl_favorite', 'Favorite', '★ Yes' if is_fav else 'No'),
+                ('lbl_played', 'Played', f"{count} time{'s' if count != 1 else ''}"),
+                ('lbl_total_time', 'Total Time', self.format_duration(total) if count else '-'),
+                ('lbl_last_played', 'Last Played', self.format_relative_time(last_ts) if last_ts else 'Never'),
             ]
+            ctx_lw = max(len(self.label(k, d)) for k, d, _ in fields)
+            rows = [f"{self.label(k, d).ljust(ctx_lw)} : {v}" for k, d, v in fields]
         for line in rows:
             if y > max_row:
                 break
@@ -2937,8 +2964,28 @@ class LofiApp:
         except curses.error:
             pass
 
-        header_text = f" {self.glyph('app_icon', '🎵 Lofi Stream CLI')} "
-        self.safe_addstr(self.stdscr, 0, (w - len(header_text)) // 2, header_text, PAIR_ACCENT | curses.A_BOLD)
+        app_name = self.glyph('app_icon', '🎵 Lofi Stream CLI')
+        badge_ok = False
+        if self.header_style() == 'badge':
+            cap_l = self.glyph('header_cap', '░▒▓')
+            cap_r = cap_l[::-1]
+            core = f"  {app_name}  "
+            total = len(cap_l) + len(core) + len(cap_r)
+            hx = (w - total) // 2
+            # Only draw the badge if it fits cleanly between the pane
+            # junction and the status indicator on the right; on a narrow
+            # terminal it would overwrite one or the other, so fall back to
+            # the plain title there (decoration goes before information).
+            _, _, _st_label = self.get_playback_status()
+            status_x = w - (len(_st_label) + 5) - 2
+            badge_ok = hx > left_w + 1 and hx + total + 1 < status_x
+        if badge_ok:
+            self.safe_addstr(self.stdscr, 0, hx, cap_l, PAIR_ACCENT | curses.A_BOLD)
+            self.safe_addstr(self.stdscr, 0, hx + len(cap_l), core, PAIR_SELECTION | curses.A_BOLD)
+            self.safe_addstr(self.stdscr, 0, hx + len(cap_l) + len(core), cap_r, PAIR_ACCENT | curses.A_BOLD)
+        else:
+            header_text = f" {app_name} "
+            self.safe_addstr(self.stdscr, 0, (w - len(header_text)) // 2, header_text, PAIR_ACCENT | curses.A_BOLD)
 
         dot, dot_color, status_label = self.get_playback_status()
         status_text = f" {dot} {status_label.upper()} "
@@ -3032,6 +3079,9 @@ class LofiApp:
                 if tstyle == 'underlined':
                     text = f" {label} "
                     style = (PAIR_ACCENT | curses.A_BOLD | curses.A_UNDERLINE) if active else PAIR_DEFAULT
+                elif tstyle == 'pill':
+                    text = f"  {num} {label.upper()}  "
+                    style = (PAIR_SELECTION | curses.A_BOLD) if active else (PAIR_LABEL | curses.A_BOLD)
                 else:
                     text = f"[{num}]{label} "
                     style = (PAIR_SELECTION | curses.A_BOLD) if active else PAIR_DEFAULT
@@ -3159,6 +3209,18 @@ class LofiApp:
             self.draw_readd_picker()
 
         self.stdscr.refresh()
+
+    HEADER_STYLES = ('plain', 'badge')
+
+    def header_style(self):
+        """How the app-name title embedded in the top border looks. 'plain'
+        (default, unchanged): bold accent-colored text. 'badge': a filled
+        block in the theme's selection colors, flanked by shaded end caps
+        (glyph 'header_cap', default ░▒▓, mirrored on the right) - the
+        app name becomes the most prominent thing on the frame instead of
+        a dim word sitting in the border line."""
+        style = self.theme.get('header_style')
+        return style if style in self.HEADER_STYLES else 'plain'
 
     DIALOG_TITLE_ALIGNS = ('left', 'center')
 

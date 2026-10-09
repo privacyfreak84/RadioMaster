@@ -40,11 +40,14 @@ Each is a resolver method on `LofiApp`, reads a theme key with a sensible defaul
 - **`density()`** — `compact`/`normal`/`spacious`. Drives `dialog_padding()` (0/1/2 rows-and-columns of interior breathing room, applied uniformly across all 11 `draw_box` callers by shifting the content-start offset, not touching per-dialog content math) and the title-to-list breathing room.
 - **`now_playing_style()`** — `dense` (full metadata table, unchanged default) or `minimal` (icon/name/status only — **and explicitly, permanently no `idle_art`**, regardless of other settings).
 - **`selection_style()`** — `block` (full-row highlight, default) or `marker` (▶-prefix + colored text).
-- **`tab_style()`** — `numbered` (`[1]Now Playing`, default) or `underlined`.
+- **`tab_style()`** — `numbered` (`[1]Now Playing`, default), `underlined` (quieter), or `pill` (louder: uppercase labels, wide padding, active tab a bold filled block, inactive tabs in the `label` color so the strip reads as a tab bar).
+- **`header_style()`** — `plain` (default: bold accent text in the top border) or `badge` (filled block in the selection colors flanked by shaded end caps, glyph `header_cap`, default `░▒▓`, mirrored on the right). The badge silently falls back to plain whenever it wouldn't fit between the pane junction and the status indicator, so a narrow terminal never has it overwrite either.
 - **`section_header_style()`** — `plain` (default) or `marker` (glyph-prefixed), applied consistently via one shared `draw_section_header` helper across all 5 header sites.
 - **`metadata_style()`** — `aligned` (default, `Label : value` rows) or `inline` (condensed), scoped to the Context pane only.
 - **`empty_state_style()`** — `plain` or `decorative`, via `draw_empty_state`, wired into every empty-state message in the app (station list, folder/search-empty, history, stats, context pane, folder manager, readd picker).
 - **`dialog_title_align()`** — `left` (default) or `center`.
+
+**Label alignment rule.** Metadata rows (Now Playing info block, Context pane) pad every label to the widest *actual* label via `ljust`, never to a hardcoded width. This used to be hardcoded spaces tuned for the default English labels, so any theme that relabeled fields (Cendre, Retro Radio) got a ragged colon column. The Now Playing width deliberately excludes the transient Sleep Timer label so rows don't shift sideways when a timer starts/stops. With default labels the output is byte-identical to the old hardcoded version (checked by diffing Classic/Cream/Reference before vs after).
 
 ### Known, deliberate gaps (not bugs — documented so nobody "fixes" them by accident)
 - **`PAIR_BORDER` (the `border` color slot) is fully wired and resolvable in every theme, but nothing in the render code actually reads it.** Dialog borders currently use `PAIR_ACCENT`/`primary`; the main outer frame uses plain fg/bg. Changing this would visibly alter every existing theme's dialog borders — it needs its own deliberate pass, not a silent fix.
