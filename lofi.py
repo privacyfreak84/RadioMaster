@@ -13,6 +13,7 @@ import threading
 import locale
 import shutil
 import textwrap
+from collections import namedtuple
 
 try:
     import tomllib
@@ -1174,6 +1175,30 @@ COLOR_KEYS = {
     'accent', 'primary', 'success', 'warning', 'highlight', 'selection',
     'label', 'secondary', 'error', 'muted', 'border', 'decorative',
 }
+
+class Rect(namedtuple('Rect', 'x y w h')):
+    """A screen rectangle: top-left corner (x, y), width w, height h, in cells.
+    Every pane draws into one of these instead of computing its own absolute
+    coordinates, which is what makes the layout something a theme can change
+    rather than something hardcoded across the drawing code."""
+    __slots__ = ()
+
+    @property
+    def right(self):
+        """Last column inside the rect."""
+        return self.x + self.w - 1
+
+    @property
+    def bottom(self):
+        """Last row inside the rect."""
+        return self.y + self.h - 1
+
+
+# The main screen's top-level carve-up. split_x is the column the vertical
+# border between the two columns sits on (still drawn by hand for now; a
+# later step derives borders from the layout itself).
+FrameLayout = namedtuple('FrameLayout', 'split_x stations right footer')
+
 
 GLYPH_KEYS = {
     'app_icon', 'favorite', 'status_playing', 'status_paused', 'status_idle',
@@ -2529,7 +2554,7 @@ class LofiApp:
         x = x0 + max(0, (width - len(clipped)) // 2)
         self.safe_addstr(self.stdscr, y, x, clipped, PAIR_MUTED)
 
-    def compute_now_playing_layout(self, right_w, compact=False):
+    def compute_now_playing_layout(self, compact=False):
         """The exact layout draw_now_playing_tab uses - what row its info
         block starts on, and the list of (text, style) rows it needs - shared
         so draw() can measure how much vertical room this tab *actually*
@@ -2548,19 +2573,21 @@ class LofiApp:
 
         This is the 'dense' now_playing_style - the full metadata table.
         See compute_now_playing_layout_minimal for the 'minimal' alternative."""
+        # All rows returned here are offsets from the top of the pane, not
+        # screen rows - the pane's rect says where it actually sits.
         if self.current_station:
             if compact:
-                art_y = 2
+                art_y = 0
                 info_y = art_y + 2  # icon row + name row, no blank gap
             else:
-                art_y = 3
+                art_y = 1
                 info_y = art_y + 4
         else:
             if compact:
-                art_y = 2  # idle art skipped entirely - it's pure decoration
+                art_y = 0  # idle art skipped entirely - it's pure decoration
                 info_y = art_y
             else:
-                art_y = 2 + len(self.theme.get('idle_art', ASCII_ART))
+                art_y = len(self.theme.get('idle_art', ASCII_ART))
                 info_y = art_y + 2
 
         # Pad every field label to the widest one so the colons line up in a
@@ -2620,7 +2647,7 @@ class LofiApp:
 
         return art_y, info_y, rows
 
-    def compute_now_playing_layout_minimal(self, right_w, compact=False):
+    def compute_now_playing_layout_minimal(self, compact=False):
         """'minimal' now_playing_style: just the station name/icon and status
         - no metadata table, no idle art. The metadata this drops (channel,
         tags, played-time stats) isn't lost, it's one glance down in the
@@ -2633,7 +2660,7 @@ class LofiApp:
         both styles are interchangeable to their callers - here `rows` holds
         already-centered (text, style) lines rather than 'Label : value'
         fields."""
-        art_y = 2
+        art_y = 0
         info_y = art_y + (1 if compact else 2)
 
         rows = []
@@ -2666,78 +2693,78 @@ class LofiApp:
 
         return art_y, info_y, rows
 
-    def now_playing_content_height(self, right_w, compact=False):
-        """The last absolute row the Now Playing tab actually needs to draw
-        into right now - not how many rows it's been given. Used to size the
-        top/bottom split around real content instead of a fixed percentage.
-        Dispatches on now_playing_style() so the sizing algorithm in draw()
-        never has to know which style is active."""
+    def now_playing_content_rows(self, compact=False):
+        """How many rows the Now Playing tab actually needs right now - not
+        how many it's been given. Used to size the top/bottom split around
+        real content instead of a fixed percentage. Dispatches on
+        now_playing_style() so the sizing algorithm in draw() never has to
+        know which style is active."""
         if self.now_playing_style() == 'minimal':
-            _, info_y, rows = self.compute_now_playing_layout_minimal(right_w, compact=compact)
+            _, info_y, rows = self.compute_now_playing_layout_minimal(compact=compact)
         else:
-            _, info_y, rows = self.compute_now_playing_layout(right_w, compact=compact)
-        return info_y + len(rows) - 1
+            _, info_y, rows = self.compute_now_playing_layout(compact=compact)
+        return info_y + len(rows)
 
-    def draw_now_playing_tab(self, left_w, right_w, max_row, compact=False):
+    def draw_now_playing_tab(self, r, compact=False):
         if self.now_playing_style() == 'minimal':
-            self.draw_now_playing_tab_minimal(left_w, right_w, max_row, compact=compact)
+            self.draw_now_playing_tab_minimal(r, compact=compact)
             return
 
-        art_y, info_y, rows = self.compute_now_playing_layout(right_w, compact=compact)
+        art_y, info_y, rows = self.compute_now_playing_layout(compact=compact)
         if self.current_station:
             icon = self.get_station_icon(self.current_station)
-            icon_row = 2 if compact else 3
-            self.safe_addstr(self.stdscr, icon_row, left_w + (right_w - 2) // 2, icon, PAIR_ACCENT)
+            icon_row = r.y + (0 if compact else 1)
+            self.safe_addstr(self.stdscr, icon_row, r.x + r.w // 2 - 1, icon, PAIR_ACCENT)
             name_line = self.current_station['name']
-            name_row = 3 if compact else 5
-            self.safe_addstr(self.stdscr, name_row, left_w + max(2, (right_w - len(name_line)) // 2), name_line, PAIR_SUCCESS | curses.A_BOLD)
+            name_row = r.y + (1 if compact else 3)
+            self.safe_addstr(self.stdscr, name_row, r.x + max(1, (r.w - len(name_line)) // 2), name_line, PAIR_SUCCESS | curses.A_BOLD)
         elif not compact:
-            y = 2
+            y = r.y
             for line in self.theme.get('idle_art', ASCII_ART):
-                if y > max_row:
+                if y > r.bottom:
                     break
-                self.safe_addstr(self.stdscr, y, left_w + (right_w - len(line)) // 2, line, PAIR_ACCENT)
+                self.safe_addstr(self.stdscr, y, r.x + (r.w - len(line)) // 2, line, PAIR_ACCENT)
                 y += 1
 
-        y = info_y
-        row_avail = max(0, right_w - 5)
+        y = r.y + info_y
+        row_avail = max(0, r.w - 3)
         for text, style in rows:
-            if y > max_row:
+            if y > r.bottom:
                 break
             if text is not None:
-                self.safe_addstr(self.stdscr, y, left_w + 4, self.clip_text(text, row_avail), style)
+                self.safe_addstr(self.stdscr, y, r.x + 3, self.clip_text(text, row_avail), style)
             y += 1
 
-    def draw_now_playing_tab_minimal(self, left_w, right_w, max_row, compact=False):
-        art_y, info_y, rows = self.compute_now_playing_layout_minimal(right_w, compact=compact)
-        if self.current_station and art_y <= max_row:
+    def draw_now_playing_tab_minimal(self, r, compact=False):
+        art_y, info_y, rows = self.compute_now_playing_layout_minimal(compact=compact)
+        if self.current_station and r.y + art_y <= r.bottom:
             icon = self.get_station_icon(self.current_station)
-            self.safe_addstr(self.stdscr, art_y, left_w + (right_w - len(icon)) // 2, icon, PAIR_ACCENT)
+            self.safe_addstr(self.stdscr, r.y + art_y, r.x + (r.w - len(icon)) // 2, icon, PAIR_ACCENT)
 
-        y = info_y
-        row_avail = max(0, right_w - 4)
+        y = r.y + info_y
+        row_avail = max(0, r.w - 2)
         for text, style in rows:
-            if y > max_row:
+            if y > r.bottom:
                 break
             if text is not None:
                 clipped = self.clip_text(text, row_avail)
-                x = left_w + max(2, (right_w - len(clipped)) // 2)
+                x = r.x + max(1, (r.w - len(clipped)) // 2)
                 self.safe_addstr(self.stdscr, y, x, clipped, style)
             y += 1
 
-    def draw_history_tab(self, left_w, right_w, max_row):
-        y = 3
-        self.draw_section_header(y, left_w + 2, self.label('recent_sessions', 'Recent Sessions'), right_w - 3)
+    def draw_history_tab(self, r):
+        y = r.y + 1
+        self.draw_section_header(y, r.x + 1, self.label('recent_sessions', 'Recent Sessions'), r.w - 1)
         y += 2
         if not self.history:
-            self.draw_empty_state(y, left_w + 2, right_w - 3, self.label('no_history', '(nothing played yet)'))
+            self.draw_empty_state(y, r.x + 1, r.w - 1, self.label('no_history', '(nothing played yet)'))
             return
 
         now = time.time()
         SUMMARY_ROWS = 7  # separator + title + up to 4 stat lines + breathing room
-        max_rows = max(0, max_row - y - SUMMARY_ROWS)
+        max_rows = max(0, r.bottom - y - SUMMARY_ROWS)
         recent = list(reversed(self.history[-max_rows:])) if max_rows > 0 else []
-        row_avail = max(0, right_w - 3)
+        row_avail = max(0, r.w - 1)
         for entry in recent:
             ended = entry.get('ended_ts') or now
             dur = ended - entry['started_ts']
@@ -2745,14 +2772,14 @@ class LofiApp:
             icon = self.get_icon_for_slug(entry.get('slug'))
             line = f"{icon} {entry['name']} - {self.format_duration(dur)}{tag}"
             style = PAIR_SUCCESS if entry.get('ended_ts') is None else PAIR_DEFAULT
-            self.safe_addstr(self.stdscr, y, left_w + 2, self.clip_text(line, row_avail), style)
+            self.safe_addstr(self.stdscr, y, r.x + 1, self.clip_text(line, row_avail), style)
             y += 1
 
         # Fill the remaining space with a summary instead of leaving it blank.
-        if y + 6 > max_row:
+        if y + 6 > r.bottom:
             return
         y += 1
-        self.draw_hline(y, left_w + 2, '─', max(0, right_w - 4))
+        self.draw_hline(y, r.x + 1, '─', max(0, r.w - 2))
         y += 2
 
         total_sessions = len(self.history)
@@ -2760,9 +2787,9 @@ class LofiApp:
         avg_time = total_time / total_sessions if total_sessions else 0
         longest = max(self.history, key=lambda e: (e.get('ended_ts') or now) - e['started_ts'])
         longest_dur = (longest.get('ended_ts') or now) - longest['started_ts']
-        longest_name = self.clip_text(longest['name'], max(0, right_w - 24))
+        longest_name = self.clip_text(longest['name'], max(0, r.w - 22))
 
-        self.draw_section_header(y, left_w + 2, self.label('session_summary', 'Session Summary'), right_w - 3)
+        self.draw_section_header(y, r.x + 1, self.label('session_summary', 'Session Summary'), r.w - 1)
         y += 2
         summary_rows = [
             f"{self.label('lbl_total_sessions', 'Total Sessions')} : {total_sessions}",
@@ -2770,37 +2797,37 @@ class LofiApp:
             f"{self.label('lbl_avg_session', 'Avg Session')}    : {self.format_duration(avg_time)}",
             f"{self.label('lbl_longest', 'Longest')}        : {longest_name} ({self.format_duration(longest_dur)})",
         ]
-        row_avail = max(0, right_w - 5)
+        row_avail = max(0, r.w - 3)
         for line in summary_rows:
-            if y > max_row:
+            if y > r.bottom:
                 break
-            self.safe_addstr(self.stdscr, y, left_w + 4, self.clip_text(line, row_avail))
+            self.safe_addstr(self.stdscr, y, r.x + 3, self.clip_text(line, row_avail))
             y += 1
 
-    def draw_stats_tab(self, left_w, right_w, max_row):
+    def draw_stats_tab(self, r):
         today, total, top = self.compute_stats()
-        y = 3
-        row_avail = max(0, right_w - 5)
-        self.draw_section_header(y, left_w + 2, self.label('listening_time', 'Listening Time'), row_avail)
+        y = r.y + 1
+        row_avail = max(0, r.w - 3)
+        self.draw_section_header(y, r.x + 1, self.label('listening_time', 'Listening Time'), row_avail)
         y += 2
-        self.safe_addstr(self.stdscr, y, left_w + 4, self.clip_text(f"{self.label('lbl_today', 'Today')}    : {self.format_duration(today)}", row_avail))
+        self.safe_addstr(self.stdscr, y, r.x + 3, self.clip_text(f"{self.label('lbl_today', 'Today')}    : {self.format_duration(today)}", row_avail))
         y += 1
-        self.safe_addstr(self.stdscr, y, left_w + 4, self.clip_text(f"{self.label('lbl_all_time', 'All Time')} : {self.format_duration(total)}", row_avail))
+        self.safe_addstr(self.stdscr, y, r.x + 3, self.clip_text(f"{self.label('lbl_all_time', 'All Time')} : {self.format_duration(total)}", row_avail))
         y += 3
-        if y > max_row:
+        if y > r.bottom:
             return
-        self.draw_section_header(y, left_w + 2, self.label('most_played', 'Most Played'), row_avail)
+        self.draw_section_header(y, r.x + 1, self.label('most_played', 'Most Played'), row_avail)
         y += 2
         if not top:
-            if y <= max_row:
-                self.draw_empty_state(y, left_w + 2, right_w - 3, self.label('no_stats_data', '(no data yet)'))
+            if y <= r.bottom:
+                self.draw_empty_state(y, r.x + 1, r.w - 1, self.label('no_stats_data', '(no data yet)'))
             return
         for name, secs in top:
-            if y > max_row:
+            if y > r.bottom:
                 break
             icon = self.get_icon_for_name(name)
             line = f"{icon} {name} - {self.format_duration(secs)}"
-            self.safe_addstr(self.stdscr, y, left_w + 4, self.clip_text(line, row_avail))
+            self.safe_addstr(self.stdscr, y, r.x + 3, self.clip_text(line, row_avail))
             y += 1
 
     def format_relative_time(self, ts):
@@ -2832,11 +2859,12 @@ class LofiApp:
         field_rows = 3 if self.metadata_style() == 'inline' else 7
         return (1 if compact else 4) + field_rows
 
-    def draw_context_pane(self, left_w, right_w, y0, max_row, compact=False):
-        if y0 > max_row:
+    def draw_context_pane(self, r, compact=False):
+        if r.h < 1:
             return
+        y0, max_row = r.y, r.bottom
         station = self.filtered_stations[self.selected_idx] if self.filtered_stations else None
-        row_avail = max(0, right_w - 5)
+        row_avail = max(0, r.w - 3)
 
         if compact and station:
             # Combine "Context" + station name onto one line instead of
@@ -2845,18 +2873,18 @@ class LofiApp:
             # padding goes before any real field does.
             icon = self.get_station_icon(station)
             header = f"{self.label('context_header', 'Context')}: {icon} {station['name']}"
-            self.draw_section_header(y0, left_w + 2, header, right_w - 3)
+            self.draw_section_header(y0, r.x + 1, header, r.w - 1)
             y = y0 + 1
         else:
-            self.draw_section_header(y0, left_w + 2, self.label('context_header', 'Context'), right_w - 3)
+            self.draw_section_header(y0, r.x + 1, self.label('context_header', 'Context'), r.w - 1)
             y = y0 + 2
             if not station or y > max_row:
                 if y <= max_row:
-                    self.draw_empty_state(y, left_w + 2, right_w - 3, self.label('no_station_selected', '(no station selected)'))
+                    self.draw_empty_state(y, r.x + 1, r.w - 1, self.label('no_station_selected', '(no station selected)'))
                 return
             icon = self.get_station_icon(station)
             header = f"{icon} {station['name']}"
-            self.safe_addstr(self.stdscr, y, left_w + 4, self.clip_text(header, row_avail), PAIR_SUCCESS | curses.A_BOLD)
+            self.safe_addstr(self.stdscr, y, r.x + 3, self.clip_text(header, row_avail), PAIR_SUCCESS | curses.A_BOLD)
             y += 2
 
         if not station or y > max_row:
@@ -2901,7 +2929,7 @@ class LofiApp:
         for line in rows:
             if y > max_row:
                 break
-            self.safe_addstr(self.stdscr, y, left_w + 4, self.clip_text(line, row_avail))
+            self.safe_addstr(self.stdscr, y, r.x + 3, self.clip_text(line, row_avail))
             y += 1
 
     def station_list_start_row(self):
@@ -2941,6 +2969,80 @@ class LofiApp:
                 return tier
         return self.clip_text(tiers[-1], avail_width)
 
+    def compute_frame_layout(self, h, w):
+        """Carve the screen into its top-level regions. Today this is the
+        fixed one-third / two-thirds split every theme has always had; it's a
+        method (rather than inline arithmetic in draw()) so it's the one
+        place a theme-defined layout will plug in."""
+        left_w = w // 3
+        return FrameLayout(
+            split_x=left_w,
+            stations=Rect(1, 1, left_w - 1, h - 3),
+            right=Rect(left_w + 1, 1, w - left_w - 2, h - 3),
+            footer=Rect(1, h - 1, w - 2, 1),
+        )
+
+    def layout_right_column(self, body):
+        """Split the right column's body (everything under the tab strip)
+        into the workspace on top and the Context pane below, divided by a
+        one-row divider. Returns dict(workspace, divider_row, context,
+        compact_np, compact_ctx); divider_row and context are None when the
+        body is too short to split usefully, in which case the workspace
+        gets all of it.
+
+        For the Now Playing tab the split is sized around what each section
+        actually needs; History/Stats are open-ended lists, so they get a
+        proportional share instead."""
+        usable_span = body.h
+        DIVIDER_ROWS = 1
+
+        if self.workspace_tab == 1:
+            # Try progressively less spacious combinations until one fits:
+            # both spacious (nicest) -> Now Playing spacious/Context
+            # compact -> both compact (no data lost, just less breathing
+            # room) -> give up and let the existing per-row truncation
+            # handle it. Deciding each section's compactness
+            # independently means a mid-sized terminal doesn't get stuck
+            # looking cramped just because the *combination* of both
+            # sections' full layouts didn't fit.
+            n_full = self.now_playing_content_rows(compact=False)
+            n_compact = self.now_playing_content_rows(compact=True)
+            c_full = self.context_pane_content_height(compact=False)
+            c_compact = self.context_pane_content_height(compact=True)
+
+            for compact_np, n_h, compact_ctx, c_h in [
+                (False, n_full, False, c_full),
+                (False, n_full, True, c_compact),
+                (True, n_compact, True, c_compact),
+            ]:
+                if n_h + DIVIDER_ROWS + c_h <= usable_span:
+                    break
+            else:
+                compact_np, n_h, compact_ctx = True, n_compact, True
+
+            top_h = n_h + (1 if not compact_np else 0)  # a little breathing room only when spacious
+            top_h = max(3, min(top_h, usable_span - DIVIDER_ROWS - 3))
+        else:
+            # History/Stats are open-ended lists - more room always shows
+            # more content, so the old proportional split still applies.
+            compact_np = False
+            compact_ctx = False
+            CONTEXT_MIN = 6
+            top_h = max(8, int(usable_span * 0.55))
+            top_h = min(top_h, usable_span - CONTEXT_MIN)
+
+        if top_h < 3 or usable_span - top_h < 3:
+            # Not enough room to split usefully; give it all to the workspace tab.
+            return dict(workspace=body, divider_row=None, context=None,
+                        compact_np=compact_np, compact_ctx=compact_ctx)
+        divider_row = body.y + top_h
+        return dict(
+            workspace=Rect(body.x, body.y, body.w, top_h),
+            divider_row=divider_row,
+            context=Rect(body.x, divider_row + 1, body.w, body.bottom - divider_row),
+            compact_np=compact_np, compact_ctx=compact_ctx,
+        )
+
     def draw(self):
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
@@ -2949,8 +3051,9 @@ class LofiApp:
             self.stdscr.refresh()
             return
 
-        left_w = w // 3
-        right_w = w - left_w
+        frame = self.compute_frame_layout(h, w)
+        left_w = frame.split_x
+        stations, right, footer = frame.stations, frame.right, frame.footer
         b = self.theme['_border_chars']
 
         self.draw_vline(1, left_w, b['v'], h - 2)
@@ -2999,22 +3102,22 @@ class LofiApp:
 
         title_word = self.label('title_favorites', 'Favorites') if self.show_favorites_only else self.label('title_stations', 'Stations')
         list_start_row = self.station_list_start_row()
-        banner_avail = max(0, left_w - 3)
+        banner_avail = max(0, stations.w - 2)
         if self.theme.get('ascii_title', False):
             font = self.resolve_ascii_font()
             banner_lines = render_ascii_word_raw(title_word, font=font)
             for i, line in enumerate(banner_lines):
-                self.draw_shaded_ascii_row(1 + i, 2, line, banner_avail)
+                self.draw_shaded_ascii_row(stations.y + i, stations.x + 1, line, banner_avail)
             if self.current_folder and self.current_folder != "All":
-                self.safe_addstr(self.stdscr, 1 + font['char_height'], 2, self.clip_text(f"· {self.current_folder}", banner_avail), PAIR_LABEL | curses.A_BOLD)
+                self.safe_addstr(self.stdscr, stations.y + font['char_height'], stations.x + 1, self.clip_text(f"· {self.current_folder}", banner_avail), PAIR_LABEL | curses.A_BOLD)
         else:
             title_bits = [title_word]
             if self.current_folder and self.current_folder != "All":
                 title_bits.append(f"· {self.current_folder}")
             title = self.clip_text(" " + " ".join(title_bits) + " ", banner_avail + 1)
-            self.safe_addstr(self.stdscr, 1, 2, title, PAIR_LABEL | curses.A_BOLD)
+            self.safe_addstr(self.stdscr, stations.y, stations.x + 1, title, PAIR_LABEL | curses.A_BOLD)
 
-        max_display = h - 2 - list_start_row
+        max_display = stations.bottom - list_start_row + 1
         if not self.filtered_stations:
             if self.search_query:
                 base = self.label('no_search_results', 'No results')
@@ -3024,7 +3127,7 @@ class LofiApp:
             else:
                 message = self.label('no_stations', 'No stations yet')
             if max_display > 0:
-                self.draw_empty_state(list_start_row + max_display // 2, 1, left_w - 2, message)
+                self.draw_empty_state(list_start_row + max_display // 2, stations.x, stations.w - 1, message)
             return
         sel_style = self.selection_style()
         marker = self.glyph('selection_marker', '▶') if sel_style == 'marker' else None
@@ -3052,20 +3155,20 @@ class LofiApp:
                 style = PAIR_SUCCESS | (curses.A_BOLD if pulse_on else 0)
             else:
                 style = PAIR_DEFAULT
-            padded_name = self.clip_text(display_name, left_w - 2).ljust(left_w - 2)
-            self.safe_addstr(self.stdscr, list_start_row + i, 1, padded_name, style)
+            padded_name = self.clip_text(display_name, stations.w - 1).ljust(stations.w - 1)
+            self.safe_addstr(self.stdscr, list_start_row + i, stations.x, padded_name, style)
 
         # --- RIGHT PANE ---
         if self.show_debug:
-            self.safe_addstr(self.stdscr, 1, left_w + 2, self.label('debug_header', '=== LIVE DEBUG LOGS ==='), PAIR_WARNING | curses.A_BOLD)
+            self.safe_addstr(self.stdscr, right.y, right.x + 1, self.label('debug_header', '=== LIVE DEBUG LOGS ==='), PAIR_WARNING | curses.A_BOLD)
             # The debug overlay is independent of the left pane's title height -
             # it always starts right under its own header, 2 rows down.
-            debug_max_display = h - 5
+            debug_max_display = right.h - 2
             display_logs = DEBUG_LOGS[-debug_max_display:]
             for i, log_str in enumerate(display_logs):
                 is_flagged = any(kw in log_str.upper() for kw in ("CRITICAL", "ERROR", "EXCEPTION", "MPV-ERR", "WARN"))
                 color = PAIR_ERROR if is_flagged else PAIR_DEFAULT
-                self.safe_addstr(self.stdscr, 3 + i, left_w + 2, log_str, color)
+                self.safe_addstr(self.stdscr, right.y + 2 + i, right.x + 1, log_str, color)
         else:
             tabs = [
                 (1, self.label('tab_now_playing', 'Now Playing')),
@@ -3073,7 +3176,7 @@ class LofiApp:
                 (3, self.label('tab_stats', 'Stats')),
             ]
             tstyle = self.tab_style()
-            tx = left_w + 2
+            tx = right.x + 1
             for num, label in tabs:
                 active = self.workspace_tab == num
                 if tstyle == 'underlined':
@@ -3085,74 +3188,30 @@ class LofiApp:
                 else:
                     text = f"[{num}]{label} "
                     style = (PAIR_SELECTION | curses.A_BOLD) if active else PAIR_DEFAULT
-                self.safe_addstr(self.stdscr, 1, tx, text, style)
+                self.safe_addstr(self.stdscr, right.y, tx, text, style)
                 tx += len(text) + 1
 
-            # Split the right pane: top = workspace tabs, bottom = Context
-            # (details of whatever's *highlighted*, which may differ from what's playing).
-            top_start = 2
-            bottom_limit = h - 3  # last row above the footer separator
-            usable_span = bottom_limit - top_start + 1
-            DIVIDER_ROWS = 1
-
-            if self.workspace_tab == 1:
-                # Try progressively less spacious combinations until one fits:
-                # both spacious (nicest) -> Now Playing spacious/Context
-                # compact -> both compact (no data lost, just less breathing
-                # room) -> give up and let the existing per-row truncation
-                # handle it. Deciding each section's compactness
-                # independently means a mid-sized terminal doesn't get stuck
-                # looking cramped just because the *combination* of both
-                # sections' full layouts didn't fit.
-                n_full = self.now_playing_content_height(right_w) - top_start + 1
-                n_compact = self.now_playing_content_height(right_w, compact=True) - top_start + 1
-                c_full = self.context_pane_content_height(compact=False)
-                c_compact = self.context_pane_content_height(compact=True)
-
-                for compact_np, n_h, compact_ctx, c_h in [
-                    (False, n_full, False, c_full),
-                    (False, n_full, True, c_compact),
-                    (True, n_compact, True, c_compact),
-                ]:
-                    if n_h + DIVIDER_ROWS + c_h <= usable_span:
-                        break
-                else:
-                    compact_np, n_h, compact_ctx = True, n_compact, True
-
-                compact = compact_np  # used for draw_now_playing_tab below
-                top_h = n_h + (1 if not compact_np else 0)  # a little breathing room only when spacious
-                top_h = max(3, min(top_h, usable_span - DIVIDER_ROWS - 3))
-            else:
-                # History/Stats are open-ended lists - more room always shows
-                # more content, so the old proportional split still applies.
-                compact = False
-                compact_ctx = False
-                CONTEXT_MIN = 6
-                top_h = max(8, int(usable_span * 0.55))
-                top_h = min(top_h, usable_span - CONTEXT_MIN)
-
-            if top_h < 3 or usable_span - top_h < 3:
-                # Not enough room to split usefully; give it all to the workspace tab.
-                top_max_row = bottom_limit
-                divider_row = None
-            else:
-                divider_row = top_start + top_h
-                top_max_row = divider_row - 1
+            # Everything under the tab strip is split into the workspace (the
+            # active tab's content) and, below it, the Context pane (details
+            # of whatever's *highlighted*, which may differ from what's playing).
+            body = Rect(right.x, right.y + 1, right.w, right.h - 1)
+            col = self.layout_right_column(body)
+            workspace, divider_row, context = col['workspace'], col['divider_row'], col['context']
 
             if self.workspace_tab == 2:
-                self.draw_history_tab(left_w, right_w, top_max_row)
+                self.draw_history_tab(workspace)
             elif self.workspace_tab == 3:
-                self.draw_stats_tab(left_w, right_w, top_max_row)
+                self.draw_stats_tab(workspace)
             else:
-                self.draw_now_playing_tab(left_w, right_w, top_max_row, compact=compact)
+                self.draw_now_playing_tab(workspace, compact=col['compact_np'])
 
             if divider_row is not None:
-                self.draw_hline(divider_row, left_w + 1, b['h'], max(0, right_w - 1))
+                self.draw_hline(divider_row, right.x, b['h'], right.w + 1)
                 try:
                     self.stdscr.addch(divider_row, w - 1, b['t_right'])
                 except curses.error:
                     pass
-                self.draw_context_pane(left_w, right_w, divider_row + 1, bottom_limit, compact=compact_ctx)
+                self.draw_context_pane(context, compact=col['compact_ctx'])
 
         self.draw_hline(h - 2, 0, b['h'], w)
         try:
@@ -3162,10 +3221,10 @@ class LofiApp:
         except curses.error:
             pass
         if self.search_mode:
-            self.safe_addstr(self.stdscr, h - 1, 1, f"{self.label('search_prompt', 'Search')}: {self.search_query}_", PAIR_WARNING)
+            self.safe_addstr(self.stdscr, footer.y, footer.x, f"{self.label('search_prompt', 'Search')}: {self.search_query}_", PAIR_WARNING)
         else:
-            controls = self.get_footer_controls(w - 2)
-            self.safe_addstr(self.stdscr, h - 1, 1, controls, PAIR_MUTED)
+            controls = self.get_footer_controls(footer.w)
+            self.safe_addstr(self.stdscr, footer.y, footer.x, controls, PAIR_MUTED)
 
         if self.toast_msg and time.time() < self.toast_until:
             self.safe_addstr(self.stdscr, 1, w - len(self.toast_msg) - 3, f" {self.toast_msg} ", PAIR_SUCCESS | curses.A_BOLD)
